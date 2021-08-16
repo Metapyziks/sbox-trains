@@ -1,0 +1,11 @@
+.intermediate/
+maps/editor/
+code/obj/
+code/bin/
+code/Properties/
+
+*.bin
+*.vmdl_c
+*.vtex_c
+*.vmat_c
+*.csproj
