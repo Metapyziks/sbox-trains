@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace Ziks.Trains
@@ -13,18 +14,36 @@ namespace Ziks.Trains
 		TopLeft
 	}
 
-	public readonly struct HexCoord
+	public static class HexEdgeExtensions
+	{
+		public static HexEdge Opposite( this HexEdge edge )
+		{
+			return (HexEdge)(((int)edge + 3) % 6);
+		}
+	}
+
+	public readonly struct HexCoord : IEquatable<HexCoord>
 	{
 		public static HexCoord Zero => new HexCoord();
 
 		public static HexCoord operator +( HexCoord a, HexCoord b )
 		{
-			return new(a.Row + b.Row, a.Col + b.Col);
+			return new(a.X + b.X, a.Y + b.Y);
 		}
 
 		public static HexCoord operator -( HexCoord a, HexCoord b )
 		{
-			return new(a.Row - b.Row, a.Col - b.Col);
+			return new(a.X - b.X, a.Y - b.Y);
+		}
+
+		public static bool operator ==( HexCoord a, HexCoord b )
+		{
+			return a.X == b.X && a.Y == b.Y;
+		}
+
+		public static bool operator !=( HexCoord a, HexCoord b )
+		{
+			return a.X != b.X || a.Y != b.Y;
 		}
 
 		public static implicit operator HexCoord( HexEdge edge )
@@ -48,13 +67,20 @@ namespace Ziks.Trains
 			}
 		}
 
-		public readonly int Row;
-		public readonly int Col;
+		public readonly int X;
+		public readonly int Y;
+		public int Z => X - Y;
 
-		public HexCoord( int row, int col )
+		public int Length => Math.Min(
+			Math.Abs( X ) + Math.Abs( Y ),
+			Math.Min(
+				Math.Abs( X ) + Math.Abs( Z ),
+				Math.Abs( Y ) + Math.Abs( Z ) ) );
+
+		public HexCoord( int x, int y )
 		{
-			this.Row = row;
-			this.Col = col;
+			X = x;
+			Y = y;
 		}
 
 		public HexCoord Neighbor( HexEdge edge )
@@ -64,7 +90,22 @@ namespace Ziks.Trains
 
 		public override string ToString()
 		{
-			return $"({Row}, {Col}, {Row - Col})";
+			return $"({X}, {Y}, {Z})";
+		}
+
+		public bool Equals(HexCoord other)
+		{
+			return X == other.X && Y == other.Y;
+		}
+
+		public override bool Equals(object obj)
+		{
+			return obj is HexCoord other && Equals(other);
+		}
+
+		public override int GetHashCode()
+		{
+			return HashCode.Combine(X, Y);
 		}
 	}
 
@@ -88,7 +129,7 @@ namespace Ziks.Trains
 				var edge = (HexEdge)i;
 				var dir = (HexCoord) edge;
 
-				Directions[i] = (dir.Row * Axis0 + dir.Col * Axis1).Normal;
+				Directions[i] = (dir.X * Axis0 + dir.Y * Axis1).Normal;
 			}
 		}
 
@@ -180,17 +221,17 @@ namespace Ziks.Trains
 			return Rotation * GetLocalDirection( edge );
 		}
 
-		public Vector3 GetLocalPosition( HexCoord gridPos )
+		public static Vector3 GetLocalPosition( HexCoord gridPos )
 		{
-			return gridPos.Row * Axis0 + gridPos.Col * Axis1;
+			return gridPos.X * Axis0 + gridPos.Y * Axis1;
 		}
 
-		public Vector3 GetLocalPosition( HexCoord gridPos, HexEdge edge )
+		public static Vector3 GetLocalPosition( HexCoord gridPos, HexEdge edge )
 		{
 			var nextPos = gridPos + edge;
 
-			var a = gridPos.Row * Axis0 + gridPos.Col * Axis1;
-			var b = nextPos.Row * Axis0 + nextPos.Col * Axis1;
+			var a = gridPos.X * Axis0 + gridPos.Y * Axis1;
+			var b = nextPos.X * Axis0 + nextPos.Y * Axis1;
 
 			return a * 0.5f + b * 0.5f;
 		}
@@ -203,6 +244,87 @@ namespace Ziks.Trains
 		public Vector3 GetLocalDirection( HexEdge edge )
 		{
 			return Directions[(int)edge];
+		}
+
+		private static float GetLocalDistanceSquared( HexCoord fromCoord, Vector2 localPos )
+		{
+			return ((Vector2)GetLocalPosition( fromCoord ) - localPos).LengthSquared;
+		}
+
+		private static float GetLocalDistanceSquared( HexCoord fromCoord, HexEdge fromEdge, Vector2 localPos )
+		{
+			return ((Vector2)GetLocalPosition( fromCoord, fromEdge ) - localPos).LengthSquared;
+		}
+
+		private static bool MoveNextShortestPath( ref HexCoord fromCoord, ref HexEdge fromEdge,
+			HexCoord toCoord, HexEdge toEdge, Vector2 toLocalPos )
+		{
+			fromCoord += fromEdge;
+
+			if ( fromCoord == toCoord && fromEdge == toEdge.Opposite() ) return true;
+
+			var edgeA = fromEdge;
+			var edgeB = (HexEdge)(((int)fromEdge + 1) % 6);
+			var edgeC = (HexEdge)(((int)fromEdge + 5) % 6);
+
+			var distA = GetLocalDistanceSquared( fromCoord, edgeA, toLocalPos );
+			var distB = GetLocalDistanceSquared( fromCoord, edgeB, toLocalPos );
+			var distC = GetLocalDistanceSquared( fromCoord, edgeC, toLocalPos );
+
+			if ( distA <= distB && distA <= distC )
+			{
+				fromEdge = edgeA;
+				return false;
+			}
+
+			if ( distB <= distA && distB <= distC )
+			{
+				fromEdge = edgeB;
+				return false;
+			}
+
+			fromEdge = edgeC;
+			return false;
+		}
+		
+		public static bool GetShortestPath( List<(HexCoord, HexEdge)> outPath, HexCoord fromCoord, HexEdge fromEdge,
+			HexCoord toCoord, HexEdge toEdge, bool allowSharpTurns )
+		{
+			if ( allowSharpTurns )
+			{
+				throw new NotImplementedException();
+			}
+
+			var fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
+			var toLocalPos = GetLocalPosition( toCoord, toEdge );
+
+			if ( GetLocalDistanceSquared( fromCoord, toLocalPos ) < GetLocalDistanceSquared( fromCoord + fromEdge, toLocalPos ) )
+			{
+				fromCoord += fromEdge;
+				fromEdge = fromEdge.Opposite();
+			}
+
+			if ( GetLocalDistanceSquared( toCoord, fromLocalPos ) < GetLocalDistanceSquared( toCoord + toEdge, fromLocalPos ) )
+			{
+				toCoord += toEdge;
+				toEdge = toEdge.Opposite();
+			}
+
+			var maxTiles = (fromCoord - toCoord).Length + 2;
+			var insertIndex = outPath.Count;
+
+			do
+			{
+				outPath.Insert( insertIndex++, (fromCoord, fromEdge) );
+				if ( MoveNextShortestPath( ref fromCoord, ref fromEdge, toCoord, toEdge, toLocalPos ) ) return true;
+				fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
+
+				outPath.Insert( insertIndex, (toCoord + toEdge, toEdge.Opposite()) );
+				if ( MoveNextShortestPath( ref toCoord, ref toEdge, fromCoord, fromEdge, fromLocalPos ) ) return true;
+				toLocalPos = GetLocalPosition( toCoord, toEdge );
+			} while ( maxTiles-- > 0 );
+
+			return false;
 		}
 	}
 }

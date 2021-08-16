@@ -1,4 +1,5 @@
-﻿using Sandbox;
+﻿using System.Collections.Generic;
+using Sandbox;
 
 namespace Ziks.Trains
 {
@@ -31,6 +32,13 @@ namespace Ziks.Trains
 		public float MinZ { get; set; } = 128f;
 		public float MaxZ { get; set; } = 512f;
 
+		private bool _dragging;
+
+		private (HexCoord hexCoord, HexEdge edge) _dragStart;
+		private (HexCoord hexCoord, HexEdge edge) _dragEnd;
+
+		private readonly List<(HexCoord, HexEdge)> _tempPath = new ();
+
 		public override void FrameSimulate()
 		{
 			EyeRot = Rotation.FromPitch( 75f );
@@ -43,10 +51,46 @@ namespace Ziks.Trains
 
 			if ( !cursorPos.HasValue ) return;
 
-			var (hexCoord, edge) = hexGrid.GetEdge( cursorPos.Value );
-			var worldPos = hexGrid.GetWorldPosition( hexCoord, edge );
+			_dragEnd = hexGrid.GetEdge( cursorPos.Value );
 
-			DebugOverlay.Line( worldPos, cursorPos.Value, Host.IsClient ? Color.Yellow : Color.Blue );
+			if ( Input.Pressed( InputButton.Attack1 ) )
+			{
+				_dragging = true;
+				_dragStart = _dragEnd;
+				return;
+			}
+
+			if ( !Input.Down( InputButton.Attack1 ) )
+			{
+				if ( _dragging )
+				{
+					// TODO: Draw track
+				}
+
+				_dragging = false;
+				return;
+			}
+
+			var startWorldPos = hexGrid.GetWorldPosition( _dragStart.hexCoord, _dragStart.edge );
+
+			_tempPath.Clear();
+
+			if ( !HexGrid.GetShortestPath( _tempPath,
+				_dragStart.hexCoord, _dragStart.edge,
+				_dragEnd.hexCoord, _dragEnd.edge, false ) )
+			{
+				DebugOverlay.Line( startWorldPos, hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ), Color.Red );
+				return;
+			}
+
+			foreach ( var (hexCoord, hexEdge) in _tempPath )
+			{
+				var endWorldPos = hexGrid.GetWorldPosition( hexCoord, hexEdge );
+
+				DebugOverlay.Line( startWorldPos, endWorldPos, Color.White );
+
+				startWorldPos = endWorldPos;
+			}
 		}
 
 		public override void Simulate()
