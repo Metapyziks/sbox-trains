@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using Sandbox;
+using Ziks.Trains.Track;
 
 namespace Ziks.Trains
 {
@@ -33,6 +35,7 @@ namespace Ziks.Trains
 		public float MaxZ { get; set; } = 512f;
 
 		private bool _dragging;
+		private bool _validPath;
 
 		private (HexCoord hexCoord, HexEdge edge) _dragStart;
 		private (HexCoord hexCoord, HexEdge edge) _dragEnd;
@@ -41,7 +44,7 @@ namespace Ziks.Trains
 
 		public override void FrameSimulate()
 		{
-			EyeRot = Rotation.FromPitch( 75f );
+			EyeRot = Rotation.FromYaw( 90f ) * Rotation.FromPitch( 75f );
 
 			if ( !Host.IsClient ) return;
 
@@ -62,12 +65,45 @@ namespace Ziks.Trains
 
 			if ( !Input.Down( InputButton.Attack1 ) )
 			{
-				if ( _dragging )
+				if ( _dragging && _validPath )
 				{
-					// TODO: Draw track
+					var prev = _tempPath.First();
+
+					foreach ( var next in _tempPath.Skip(1) )
+					{
+						var from = prev.Item2.Opposite();
+						var to = next.Item2;
+
+						if ( RailExtensions.TryGetRailPiece( from, to, out var piece ) )
+						{
+							var model = new ModelEntity( "models/track.vmdl" )
+							{
+								Position = hexGrid.GetWorldPosition( next.Item1 )
+							};
+
+							if ( (piece.ToTile() & RailTile.Curved) == 0 )
+							{
+								model.SetBodyGroup( 0, 0 );
+								model.Rotation = Rotation.FromYaw( 90f ) *
+								                 Rotation.LookAt( hexGrid.GetWorldDirection( next.Item2 ) );
+							}
+							else
+							{
+								var rot = next.Item2 < prev.Item2 ? 30f : -90f;
+
+								model.SetBodyGroup( 0, 1 );
+								model.Rotation = Rotation.FromYaw( rot ) *
+								                 Rotation.LookAt( hexGrid.GetWorldDirection( next.Item2 ) );
+							}
+
+						}
+
+						prev = next;
+					}
 				}
 
 				_dragging = false;
+				_validPath = false;
 				return;
 			}
 
@@ -79,9 +115,12 @@ namespace Ziks.Trains
 				_dragStart.hexCoord, _dragStart.edge,
 				_dragEnd.hexCoord, _dragEnd.edge, false ) )
 			{
+				_validPath = false;
 				DebugOverlay.Line( startWorldPos, hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ), Color.Red );
 				return;
 			}
+
+			_validPath = _tempPath.Count > 1;
 
 			foreach ( var (hexCoord, hexEdge) in _tempPath )
 			{
@@ -95,7 +134,7 @@ namespace Ziks.Trains
 
 		public override void Simulate()
 		{
-			var vel = (Vector3.Forward * Input.Forward) + (Vector3.Left * Input.Left);
+			var vel = (Vector3.Left * Input.Forward) + (Vector3.Backward * Input.Left);
 
 			if ( Input.Down( InputButton.Jump ) )
 			{

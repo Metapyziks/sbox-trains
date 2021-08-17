@@ -19,14 +19,6 @@ namespace Ziks.Trains
 			{
 				HexGrid = new HexGrid();
 				Hud = new Hud();
-
-				for ( var i = 0; i < 3; ++i )
-				{
-					var testModel = new ModelEntity( "models/track.vmdl" ) { Scale = 0.25f };
-					testModel.Position = HexGrid.GetWorldPosition( new HexCoord( 0, i ) );
-					testModel.SetBodyGroup( 0, i );
-				}
-
 			}
 
 			Instance = this;
