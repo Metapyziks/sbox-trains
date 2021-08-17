@@ -5,29 +5,35 @@ namespace Ziks.Trains.Track
 {
 	public static class RailExtensions
 	{
+		/// <summary>
+		/// Combines two tiles, removing redundant pieces.
+		/// </summary>
 		public static RailTile Combine( this RailTile tile, RailTile other )
 		{
-			var combined = tile | other;
+			return (tile | other).Normalized();
+		}
 
-			if ( (combined & RailTile.Buffer) == 0 )
-			{
-				return combined;
-			}
+		/// <summary>
+		/// Returns a tile without redundant pieces.
+		/// </summary>
+		public static RailTile Normalized( this RailTile tile )
+		{
+			var withoutBuffer = tile & ~RailTile.Buffer;
 
-			var combinedWithoutBuffer = combined & ~RailTile.Buffer;
+			if ( withoutBuffer == tile ) return tile;
 
 			for ( var i = 0; i < 6; ++i )
 			{
 				var edge = (HexEdge)i;
 				var buffer = (RailTile)(1 << (i + 9));
 
-				if ( combinedWithoutBuffer.Touches( edge ) )
+				if ( withoutBuffer.Touches( edge ) )
 				{
-					combined &= ~buffer;
+					tile &= ~buffer;
 				}
 			}
 
-			return combined;
+			return tile;
 		}
 
 		public static bool Touches( this RailPiece piece, HexEdge edge )
@@ -221,12 +227,7 @@ namespace Ziks.Trains.Track
 		{
 			PossiblePieces.Clear();
 
-			for ( var i = 0; i < 9 + 6; ++i )
-			{
-				var piece = (RailPiece)i;
-
-				if ( (tile & piece.ToTile()) != 0 ) PossiblePieces.Add( piece );
-			}
+			tile.GetPieces( PossiblePieces );
 
 			if ( PossiblePieces.Count == 0 )
 			{
@@ -234,6 +235,16 @@ namespace Ziks.Trains.Track
 			}
 
 			return PossiblePieces[random.Next( 0, PossiblePieces.Count )];
+		}
+
+		public static void GetPieces( this RailTile tile, List<RailPiece> outPieces )
+		{
+			for ( var i = 0; i < 9 + 6; ++i )
+			{
+				var piece = (RailPiece)i;
+
+				if ( (tile & piece.ToTile()) != 0 ) outPieces.Add( piece );
+			}
 		}
 
 		public static RailPiece GetBufferRailPiece( this HexEdge edge )

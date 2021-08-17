@@ -40,7 +40,7 @@ namespace Ziks.Trains
 		private (HexCoord hexCoord, HexEdge edge) _dragStart;
 		private (HexCoord hexCoord, HexEdge edge) _dragEnd;
 
-		private readonly List<(HexCoord, HexEdge)> _tempPath = new ();
+		private readonly List<(HexCoord coord, HexEdge edge)> _tempPath = new ();
 
 		public override void FrameSimulate()
 		{
@@ -76,7 +76,8 @@ namespace Ziks.Trains
 				return;
 			}
 
-			var startWorldPos = hexGrid.GetWorldPosition( _dragStart.hexCoord, _dragStart.edge );
+			const float height = 2f;
+			const float width = 4f;
 
 			_tempPath.Clear();
 
@@ -85,19 +86,32 @@ namespace Ziks.Trains
 				_dragEnd.hexCoord, _dragEnd.edge, false ) )
 			{
 				_validPath = false;
-				DebugOverlay.Line( startWorldPos, hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ), Color.Red );
+				DebugOverlay.Line( hexGrid.GetWorldPosition( _dragStart.hexCoord, _dragStart.edge ) + Vector3.Up * height,
+					hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ) + Vector3.Up * height, Color.Red );
 				return;
 			}
 
 			_validPath = _tempPath.Count > 1;
 
-			foreach ( var (hexCoord, hexEdge) in _tempPath )
+			if ( !_validPath ) return;
+
+			var prev = _tempPath.First();
+
+			var prevWorldPos = hexGrid.GetWorldPosition( prev.coord, prev.edge );
+			var prevWorldNorm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( prev.edge );
+
+			foreach ( var next in _tempPath )
 			{
-				var endWorldPos = hexGrid.GetWorldPosition( hexCoord, hexEdge );
+				var nextWorldPos = hexGrid.GetWorldPosition( next.coord, next.edge );
+				var nextWorldNorm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( next.edge );
 
-				DebugOverlay.Line( startWorldPos, endWorldPos, Color.White );
+				DebugOverlay.Line( prevWorldPos - prevWorldNorm * width + Vector3.Up * height,
+					nextWorldPos - nextWorldNorm * width + Vector3.Up * height, Color.White );
+				DebugOverlay.Line( prevWorldPos + prevWorldNorm * width + Vector3.Up * height,
+					nextWorldPos + nextWorldNorm * width + Vector3.Up * height, Color.White );
 
-				startWorldPos = endWorldPos;
+				prevWorldPos = nextWorldPos;
+				prevWorldNorm = nextWorldNorm;
 			}
 		}
 
