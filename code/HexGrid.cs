@@ -22,7 +22,7 @@ namespace Ziks.Trains
 		}
 	}
 
-	public readonly struct HexCoord : IEquatable<HexCoord>
+	public struct HexCoord : IEquatable<HexCoord>
 	{
 		public static HexCoord Zero => new HexCoord();
 
@@ -67,8 +67,8 @@ namespace Ziks.Trains
 			}
 		}
 
-		public readonly int X;
-		public readonly int Y;
+		public int X { get; set; }
+		public int Y { get; set; }
 		public int Z => X - Y;
 
 		public int Length => Math.Min(

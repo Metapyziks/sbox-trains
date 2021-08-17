@@ -1,14 +1,18 @@
 using Sandbox;
+using Ziks.Trains.Track;
 using Ziks.Trains.UI;
 
 namespace Ziks.Trains
 {
     public partial class Game : Sandbox.Game
     {
-		public static Game Instance { get; private set; }
+		public new static Game Current => (Game)Sandbox.Game.Current;
 
 		[Net]
 		public HexGrid HexGrid { get; set; }
+
+		[Net]
+		public TrackManager TrackManager { get; set; }
 
 		[Net]
 		public Hud Hud { get; set; }
@@ -18,10 +22,9 @@ namespace Ziks.Trains
 			if ( IsServer )
 			{
 				HexGrid = new HexGrid();
+				TrackManager = new TrackManager();
 				Hud = new Hud();
 			}
-
-			Instance = this;
 		}
 
 		public override void ClientJoined( Client cl )

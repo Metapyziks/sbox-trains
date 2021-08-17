@@ -48,7 +48,7 @@ namespace Ziks.Trains
 
 			if ( !Host.IsClient ) return;
 
-			var hexGrid = Game.Instance.HexGrid;
+			var hexGrid = Game.Current.HexGrid;
 
 			var cursorPos = hexGrid.Trace( Input.Cursor );
 
@@ -67,39 +67,8 @@ namespace Ziks.Trains
 			{
 				if ( _dragging && _validPath )
 				{
-					var prev = _tempPath.First();
-
-					foreach ( var next in _tempPath.Skip(1) )
-					{
-						var from = prev.Item2.Opposite();
-						var to = next.Item2;
-
-						if ( RailExtensions.TryGetRailPiece( from, to, out var piece ) )
-						{
-							var model = new ModelEntity( "models/track.vmdl" )
-							{
-								Position = hexGrid.GetWorldPosition( next.Item1 )
-							};
-
-							if ( (piece.ToTile() & RailTile.Curved) == 0 )
-							{
-								model.SetBodyGroup( 0, 0 );
-								model.Rotation = Rotation.FromYaw( 90f ) *
-								                 Rotation.LookAt( hexGrid.GetWorldDirection( next.Item2 ) );
-							}
-							else
-							{
-								var rot = next.Item2 < prev.Item2 ? 30f : -90f;
-
-								model.SetBodyGroup( 0, 1 );
-								model.Rotation = Rotation.FromYaw( rot ) *
-								                 Rotation.LookAt( hexGrid.GetWorldDirection( next.Item2 ) );
-							}
-
-						}
-
-						prev = next;
-					}
+					TrackManager.SpawnTrack( _dragStart.hexCoord, _dragStart.edge,
+						_dragEnd.hexCoord, _dragEnd.edge );
 				}
 
 				_dragging = false;
