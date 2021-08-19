@@ -42,6 +42,23 @@ namespace Ziks.Trains
 
 		private readonly List<HexCoordEdge> _tempPath = new ();
 
+		private static void DrawTrackPiece( HexGrid hexGrid, HexCoord coord, HexEdge a, HexEdge b, Color color )
+		{
+			const float height = 2f;
+			const float width = 4f;
+
+			var prevWorldPos = hexGrid.GetWorldPosition( new HexCoordEdge( coord, a ) );
+			var prevWorldNorm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( a );
+
+			var nextWorldPos = b == a ? hexGrid.GetWorldPosition( coord ) : hexGrid.GetWorldPosition( new HexCoordEdge( coord, b ) );
+			var nextWorldNorm = b == a ? prevWorldNorm : Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( b.Opposite() );
+
+			DebugOverlay.Line( prevWorldPos - prevWorldNorm * width + Vector3.Up * height,
+				nextWorldPos - nextWorldNorm * width + Vector3.Up * height, color, depthTest: false );
+			DebugOverlay.Line( prevWorldPos + prevWorldNorm * width + Vector3.Up * height,
+				nextWorldPos + nextWorldNorm * width + Vector3.Up * height, color, depthTest: false );
+		}
+
 		public override void FrameSimulate()
 		{
 			EyeRot = Rotation.FromYaw( 90f ) * Rotation.FromPitch( 75f );
@@ -54,11 +71,23 @@ namespace Ziks.Trains
 
 			if ( !cursorPos.HasValue ) return;
 
-			const float height = 2f;
-			const float width = 4f;
-
 			var lastDragEnd = _dragEnd;
 			_dragEnd = hexGrid.GetHexCoordEdge( cursorPos.Value );
+
+			if ( Input.Down( InputButton.Attack2 ) )
+			{
+				_dragging = false;
+				_validPath = false;
+
+				DrawTrackPiece( hexGrid, _dragEnd.Coord, _dragEnd.Edge, _dragEnd.Edge, Color.Red );
+
+				if ( lastDragEnd != _dragEnd || Input.Pressed( InputButton.Attack2 ) )
+				{
+					TrackManager.DeleteTrack( _dragEnd );
+				}
+
+				return;
+			}
 
 			if ( Input.Pressed( InputButton.Attack1 ) )
 			{
@@ -74,15 +103,7 @@ namespace Ziks.Trains
 					TrackManager.SpawnTrack( _dragStart, _dragEnd );
 				}
 
-				var norm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( _dragEnd.Edge );
-
-				DebugOverlay.Line(
-					hexGrid.GetWorldPosition( _dragEnd ) - norm * width + Vector3.Up * height,
-					hexGrid.GetWorldPosition( _dragEnd.Coord ) - norm * width + Vector3.Up * height, Color.White );
-
-				DebugOverlay.Line(
-					hexGrid.GetWorldPosition( _dragEnd ) + norm * width + Vector3.Up * height,
-					hexGrid.GetWorldPosition( _dragEnd.Coord ) + norm * width + Vector3.Up * height, Color.White );
+				DrawTrackPiece( hexGrid, _dragEnd.Coord, _dragEnd.Edge, _dragEnd.Edge, Color.White );
 
 				_dragging = false;
 				_validPath = false;
@@ -95,31 +116,14 @@ namespace Ziks.Trains
 				_validPath = HexGrid.GetShortestPath( _tempPath, _dragStart, _dragEnd, false ) && _tempPath.Count > 1;
 			}
 
-			if ( !_validPath )
-			{
-				DebugOverlay.Line(
-					hexGrid.GetWorldPosition( _dragStart ) + Vector3.Up * height,
-					hexGrid.GetWorldPosition( _dragEnd ) + Vector3.Up * height, Color.Red );
-				return;
-			}
+			if ( !_validPath ) return;
 
 			var prev = _tempPath.First();
 
-			var prevWorldPos = hexGrid.GetWorldPosition( prev );
-			var prevWorldNorm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( prev.Edge );
-
-			foreach ( var next in _tempPath )
+			foreach ( var next in _tempPath.Skip( 1 ) )
 			{
-				var nextWorldPos = hexGrid.GetWorldPosition( next );
-				var nextWorldNorm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( next.Edge );
-
-				DebugOverlay.Line( prevWorldPos - prevWorldNorm * width + Vector3.Up * height,
-					nextWorldPos - nextWorldNorm * width + Vector3.Up * height, Color.White );
-				DebugOverlay.Line( prevWorldPos + prevWorldNorm * width + Vector3.Up * height,
-					nextWorldPos + nextWorldNorm * width + Vector3.Up * height, Color.White );
-
-				prevWorldPos = nextWorldPos;
-				prevWorldNorm = nextWorldNorm;
+				DrawTrackPiece( hexGrid, next.Coord, prev.Edge.Opposite(), next.Edge, Color.White );
+				prev = next;
 			}
 		}
 

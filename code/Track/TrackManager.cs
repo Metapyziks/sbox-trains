@@ -27,6 +27,20 @@ namespace Ziks.Trains.Track
 				new HexCoordEdge( toCoordX, toCoordY, toEdge ) );
 		}
 
+		public static void DeleteTrack( HexCoordEdge touching )
+		{
+			DeleteTrack( touching.Coord.X, touching.Coord.Y, touching.Edge );
+		}
+
+		[ServerCmd]
+		private static void DeleteTrack( int touchingCoordX, int touchingCoordY, HexEdge touchingEdge )
+		{
+			var trackMan = Game.Current.TrackManager;
+			var client = ConsoleSystem.Caller;
+
+			trackMan.DeleteTrack( client, new HexCoordEdge( touchingCoordX, touchingCoordY, touchingEdge ) );
+		}
+
 		public readonly struct SpawnedRailPiece : IEquatable<SpawnedRailPiece>
 		{
 			public readonly HexCoord HexCoord;
@@ -71,8 +85,6 @@ namespace Ziks.Trains.Track
 		{
 			Host.AssertServer();
 
-			var hexGrid = Game.Current.HexGrid;
-
 			_tempPath.Clear();
 
 			if ( !HexGrid.GetShortestPath( _tempPath, start, end, false ) )
@@ -98,6 +110,18 @@ namespace Ziks.Trains.Track
 			}
 
 			PlaceTile( prev.Coord + prev.Edge, prev.Edge.Opposite().GetBufferRailPiece().ToTile() );
+		}
+
+		public void DeleteTrack( Client client, HexCoordEdge touching )
+		{
+			Host.AssertServer();
+
+			if ( !_tiles.TryGetValue( touching.Coord, out var tile ) )
+			{
+				return;
+			}
+
+			RemoveTile( touching.Coord, tile.FilterByEdge( touching.Edge ) );
 		}
 
 		public void PlaceTile( HexCoord coord, RailTile toAdd )
