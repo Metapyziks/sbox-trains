@@ -10,20 +10,21 @@ namespace Ziks.Trains.Track
 {
 	public partial class TrackManager : Entity
 	{
-		public static void SpawnTrack( HexCoord fromCoord, HexEdge fromEdge, HexCoord toCoord, HexEdge toEdge )
+		public static void SpawnTrack( HexCoordEdge from, HexCoordEdge to )
 		{
-			SpawnTrack( fromCoord.X, fromCoord.Y, fromEdge, toCoord.X, toCoord.Y, toEdge );
+			SpawnTrack( from.Coord.X, from.Coord.Y, from.Edge, to.Coord.X, to.Coord.Y, to.Edge );
 		}
 
 		[ServerCmd]
-		private static void SpawnTrack( int fromCoordX, int fromCoordY, HexEdge fromEdge, int toCoordX, int toCoordY, HexEdge toEdge )
+		private static void SpawnTrack( int fromCoordX, int fromCoordY, HexEdge fromEdge,
+			int toCoordX, int toCoordY, HexEdge toEdge )
 		{
 			var trackMan = Game.Current.TrackManager;
 			var client = ConsoleSystem.Caller;
 
 			trackMan.SpawnTrack( client,
-				new HexCoord(fromCoordX, fromCoordY), fromEdge,
-				new HexCoord( toCoordX, toCoordY ), toEdge );
+				new HexCoordEdge( fromCoordX, fromCoordY, fromEdge ),
+				new HexCoordEdge( toCoordX, toCoordY, toEdge ) );
 		}
 
 		public readonly struct SpawnedRailPiece : IEquatable<SpawnedRailPiece>
@@ -63,10 +64,10 @@ namespace Ziks.Trains.Track
 			Transmit = TransmitType.Always;
 		}
 
-		private readonly List<(HexCoord coord, HexEdge edge)> _tempPath = new List<(HexCoord coord, HexEdge edge)>();
-		private readonly List<RailPiece> _tempPieces = new List<RailPiece>();
+		private readonly List<HexCoordEdge> _tempPath = new ();
+		private readonly List<RailPiece> _tempPieces = new ();
 
-		public void SpawnTrack( Client client, HexCoord fromCoord, HexEdge fromEdge, HexCoord toCoord, HexEdge toEdge )
+		public void SpawnTrack( Client client, HexCoordEdge start, HexCoordEdge end )
 		{
 			Host.AssertServer();
 
@@ -74,29 +75,29 @@ namespace Ziks.Trains.Track
 
 			_tempPath.Clear();
 
-			if ( !HexGrid.GetShortestPath( _tempPath, fromCoord, fromEdge, toCoord, toEdge, false ) )
+			if ( !HexGrid.GetShortestPath( _tempPath, start, end, false ) )
 			{
 				return;
 			}
 
 			var prev = _tempPath.First();
 
-			PlaceTile( prev.coord, prev.edge.GetBufferRailPiece().ToTile() );
+			PlaceTile( prev.Coord, prev.Edge.GetBufferRailPiece().ToTile() );
 
 			foreach ( var next in _tempPath.Skip( 1 ) )
 			{
-				var from = prev.Item2.Opposite();
-				var to = next.Item2;
+				var from = prev.Edge.Opposite();
+				var to = next.Edge;
 
 				if ( RailExtensions.TryGetRailPiece( from, to, out var piece ) )
 				{
-					PlaceTile( next.coord, piece.ToTile() );
+					PlaceTile( next.Coord, piece.ToTile() );
 				}
 
 				prev = next;
 			}
 
-			PlaceTile( prev.coord + prev.edge, prev.edge.Opposite().GetBufferRailPiece().ToTile() );
+			PlaceTile( prev.Coord + prev.Edge, prev.Edge.Opposite().GetBufferRailPiece().ToTile() );
 		}
 
 		public void PlaceTile( HexCoord coord, RailTile toAdd )

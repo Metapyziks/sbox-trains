@@ -14,6 +14,51 @@ namespace Ziks.Trains
 		TopLeft
 	}
 
+	public readonly struct HexCoordEdge : IEquatable<HexCoordEdge>
+	{
+		public static bool operator ==( HexCoordEdge a, HexCoordEdge b )
+		{
+			return a.Coord == b.Coord && a.Edge == b.Edge;
+		}
+
+		public static bool operator !=( HexCoordEdge a, HexCoordEdge b )
+		{
+			return a.Coord != b.Coord || a.Edge != b.Edge;
+		}
+
+		public HexCoord Coord { get; init; }
+		public HexEdge Edge { get; init; }
+
+		public HexCoordEdge( int x, int y, HexEdge hexEdge )
+		{
+			Coord = new HexCoord( x, y );
+			Edge = hexEdge;
+		}
+
+		public HexCoordEdge( HexCoord hexCoord, HexEdge hexEdge )
+		{
+			Coord = hexCoord;
+			Edge = hexEdge;
+		}
+
+		public HexCoordEdge Opposite => new( Coord + Edge, Edge.Opposite() );
+
+		public bool Equals(HexCoordEdge other)
+		{
+			return Coord.Equals(other.Coord) && Edge == other.Edge;
+		}
+
+		public override bool Equals(object obj)
+		{
+			return obj is HexCoordEdge other && Equals(other);
+		}
+
+		public override int GetHashCode()
+		{
+			return HashCode.Combine(Coord, (int)Edge);
+		}
+	}
+
 	public static class HexEdgeExtensions
 	{
 		public static HexEdge Opposite( this HexEdge edge )
@@ -22,7 +67,7 @@ namespace Ziks.Trains
 		}
 	}
 
-	public struct HexCoord : IEquatable<HexCoord>
+	public readonly struct HexCoord : IEquatable<HexCoord>
 	{
 		public static HexCoord Zero => new HexCoord();
 
@@ -67,8 +112,8 @@ namespace Ziks.Trains
 			}
 		}
 
-		public int X { get; set; }
-		public int Y { get; set; }
+		public int X { get; init; }
+		public int Y { get; init; }
 		public int Z => X - Y;
 
 		public int Length => Math.Min(
@@ -187,7 +232,7 @@ namespace Ziks.Trains
 			return leftDist < rightDist ? new HexCoord( col, leftRow ) : new HexCoord( col + 1, rightRow );
 		}
 
-		public (HexCoord hexCoord, HexEdge edge) GetEdge( Vector3 worldPos )
+		public HexCoordEdge GetHexCoordEdge( Vector3 worldPos )
 		{
 			var hexCoord = GetHexCoord( worldPos );
 			var localPos = GetLocalPosition( worldPos );
@@ -197,7 +242,7 @@ namespace Ziks.Trains
 			var angle = -MathF.Atan2( diff.y, diff.x );
 			var rawIndex = (int)MathF.Round( angle * 3f / MathF.PI + 4.5f );
 
-			return (hexCoord, (HexEdge)(rawIndex % 6));
+			return new(hexCoord, (HexEdge)(rawIndex % 6));
 		}
 
 		public Vector3? Trace( Ray ray, double maxDistance = double.PositiveInfinity )
@@ -211,9 +256,9 @@ namespace Ziks.Trains
 			return Position + Rotation * GetLocalPosition( gridPos ) * Scale;
 		}
 
-		public Vector3 GetWorldPosition( HexCoord gridPos, HexEdge edge )
+		public Vector3 GetWorldPosition( HexCoordEdge coordEdge )
 		{
-			return Position + Rotation * GetLocalPosition( gridPos, edge ) * Scale;
+			return Position + Rotation * GetLocalPosition( coordEdge ) * Scale;
 		}
 
 		public Vector3 GetWorldDirection( HexEdge edge )
@@ -226,11 +271,12 @@ namespace Ziks.Trains
 			return gridPos.X * Axis0 + gridPos.Y * Axis1;
 		}
 
-		public static Vector3 GetLocalPosition( HexCoord gridPos, HexEdge edge )
+		public static Vector3 GetLocalPosition( HexCoordEdge coordEdge )
 		{
-			var nextPos = gridPos + edge;
+			var prevPos = coordEdge.Coord;
+			var nextPos = coordEdge.Coord + coordEdge.Edge;
 
-			var a = gridPos.X * Axis0 + gridPos.Y * Axis1;
+			var a = prevPos.X * Axis0 + prevPos.Y * Axis1;
 			var b = nextPos.X * Axis0 + nextPos.Y * Axis1;
 
 			return a * 0.5f + b * 0.5f;
@@ -246,76 +292,111 @@ namespace Ziks.Trains
 			return Directions[(int)edge];
 		}
 
-		private static float GetLocalDistanceSquared( HexCoord fromCoord, Vector2 localPos )
+		private static readonly ThirdParty.PriorityQueue<int, HexCoordEdge> AStarOpenQueue = new();
+		private static readonly HashSet<HexCoordEdge> AStarOpenSet = new();
+		private static readonly Dictionary<HexCoordEdge, (HexCoordEdge From, int G, int F)> AStarCameFrom = new();
+
+		private const int StraightCost = 1;
+		private const int CurvedCost = 2;
+
+		private static int H( HexCoordEdge node, HexCoordEdge dest )
 		{
-			return ((Vector2)GetLocalPosition( fromCoord ) - localPos).LengthSquared;
+			var tileDiff = node.Coord - dest.Coord;
+			var tileDist = tileDiff.Length;
+			var edgeDist = Math.Abs( (int)node.Edge - (int)dest.Edge );
+
+			if ( edgeDist > 3 ) edgeDist = 6 - edgeDist;
+
+			return Math.Max(tileDist, edgeDist) * StraightCost;
 		}
 
-		private static float GetLocalDistanceSquared( HexCoord fromCoord, HexEdge fromEdge, Vector2 localPos )
+		private static void ReconstructPath( List<HexCoordEdge> outPath,
+			Dictionary<HexCoordEdge, (HexCoordEdge From, int G, int F)> cameFrom,
+			HexCoordEdge current )
 		{
-			return ((Vector2)GetLocalPosition( fromCoord, fromEdge ) - localPos).LengthSquared;
-		}
+			var startIndex = outPath.Count;
 
-		private static bool MoveNextShortestPath( ref HexCoord fromCoord, ref HexEdge fromEdge,
-			HexCoord toCoord, HexEdge toEdge, Vector2 toLocalPos )
-		{
-			fromCoord += fromEdge;
-
-			if ( fromCoord == toCoord && fromEdge == toEdge.Opposite() ) return true;
-
-			var edgeA = fromEdge;
-			var edgeB = (HexEdge)(((int)fromEdge + 1) % 6);
-			var edgeC = (HexEdge)(((int)fromEdge + 5) % 6);
-
-			var distA = GetLocalDistanceSquared( fromCoord, edgeA, toLocalPos );
-			var distB = GetLocalDistanceSquared( fromCoord, edgeB, toLocalPos );
-			var distC = GetLocalDistanceSquared( fromCoord, edgeC, toLocalPos );
-
-			if ( distA <= distB && distA <= distC )
+			while (true)
 			{
-				fromEdge = edgeA;
-				return false;
+				outPath.Add( current );
+				
+				if ( !cameFrom.TryGetValue( current, out var pair ) ) break;
+				if ( pair.From == current ) break;
+
+				current = pair.From;
 			}
 
-			if ( distB <= distA && distB <= distC )
-			{
-				fromEdge = edgeB;
-				return false;
-			}
-
-			fromEdge = edgeC;
-			return false;
+			outPath.Reverse( startIndex, outPath.Count - startIndex );
 		}
-		
-		public static bool GetShortestPath( List<(HexCoord, HexEdge)> outPath, HexCoord fromCoord, HexEdge fromEdge,
-			HexCoord toCoord, HexEdge toEdge, bool allowSharpTurns )
+
+		private static readonly int[] EdgeOffsets = { 0, 1, 5 };
+
+		public static bool GetShortestPath( List<HexCoordEdge> outPath, HexCoordEdge start, HexCoordEdge end, bool allowSharpTurns )
 		{
 			if ( allowSharpTurns )
 			{
 				throw new NotImplementedException();
 			}
 
-			fromCoord += fromEdge;
-			fromEdge = fromEdge.Opposite();
+			if ( start == end ) return false;
 
-			toCoord += toEdge;
-			toEdge = toEdge.Opposite();
+			start = start.Opposite;
 
-			var maxTiles = (fromCoord - toCoord).Length + 2;
-			var insertIndex = outPath.Count;
+			var openQueue = AStarOpenQueue;
+			var openSet = AStarOpenSet;
+			var cameFrom = AStarCameFrom;
 
-			do
+			openQueue.Clear();
+			openSet.Clear();
+			cameFrom.Clear();
+
+			openQueue.Enqueue( H( start, end ), start );
+			openSet.Add( start );
+			cameFrom.Add( start, (start, 0, -1) );
+
+			while ( !openQueue.IsEmpty )
 			{
-				var toLocalPos = GetLocalPosition( toCoord, toEdge );
+				var node = openQueue.DequeueValue();
+				openSet.Remove( node );
 
-				outPath.Insert( insertIndex++, (fromCoord, fromEdge) );
-				if ( MoveNextShortestPath( ref fromCoord, ref fromEdge, toCoord, toEdge, toLocalPos ) ) return true;
+				if ( node == end )
+				{
+					ReconstructPath( outPath, cameFrom, node );
+					return true;
+				}
 
-				var fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
+				var nodeCost = cameFrom[node].G;
+				var nextCoord = node.Coord + node.Edge;
 
-				outPath.Insert( insertIndex, (toCoord + toEdge, toEdge.Opposite()) );
-				if ( MoveNextShortestPath( ref toCoord, ref toEdge, fromCoord, fromEdge, fromLocalPos ) ) return true;
-			} while ( maxTiles-- > 0 );
+				for ( var i = 2; i >= 0; --i )
+				{
+					var nextEdge = (HexEdge)(((int)node.Edge + EdgeOffsets[i]) % 6);
+
+					var next = new HexCoordEdge( nextCoord, nextEdge );
+					var newCost = nodeCost + (i == 0 ? StraightCost : CurvedCost);
+					var existing = cameFrom.TryGetValue( next, out var oldCosts );
+
+					if ( existing && newCost >= oldCosts.G ) continue;
+
+					var newCosts = (From: node, G: newCost, F: newCost + H( next, end ));
+
+					if ( existing )
+					{
+						cameFrom[next] = newCosts;
+					}
+					else
+					{
+						cameFrom.Add( next, newCosts );
+					}
+
+					if ( !openSet.Add( next ) )
+					{
+						openQueue.Remove( new(oldCosts.F, next) );
+					}
+
+					openQueue.Enqueue( newCosts.F, next );
+				}
+			}
 
 			return false;
 		}
