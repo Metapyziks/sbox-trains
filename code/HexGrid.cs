@@ -295,33 +295,26 @@ namespace Ziks.Trains
 				throw new NotImplementedException();
 			}
 
-			var fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
-			var toLocalPos = GetLocalPosition( toCoord, toEdge );
+			fromCoord += fromEdge;
+			fromEdge = fromEdge.Opposite();
 
-			if ( GetLocalDistanceSquared( fromCoord, toLocalPos ) < GetLocalDistanceSquared( fromCoord + fromEdge, toLocalPos ) )
-			{
-				fromCoord += fromEdge;
-				fromEdge = fromEdge.Opposite();
-			}
-
-			if ( GetLocalDistanceSquared( toCoord, fromLocalPos ) < GetLocalDistanceSquared( toCoord + toEdge, fromLocalPos ) )
-			{
-				toCoord += toEdge;
-				toEdge = toEdge.Opposite();
-			}
+			toCoord += toEdge;
+			toEdge = toEdge.Opposite();
 
 			var maxTiles = (fromCoord - toCoord).Length + 2;
 			var insertIndex = outPath.Count;
 
 			do
 			{
+				var toLocalPos = GetLocalPosition( toCoord, toEdge );
+
 				outPath.Insert( insertIndex++, (fromCoord, fromEdge) );
 				if ( MoveNextShortestPath( ref fromCoord, ref fromEdge, toCoord, toEdge, toLocalPos ) ) return true;
-				fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
+
+				var fromLocalPos = GetLocalPosition( fromCoord, fromEdge );
 
 				outPath.Insert( insertIndex, (toCoord + toEdge, toEdge.Opposite()) );
 				if ( MoveNextShortestPath( ref toCoord, ref toEdge, fromCoord, fromEdge, fromLocalPos ) ) return true;
-				toLocalPos = GetLocalPosition( toCoord, toEdge );
 			} while ( maxTiles-- > 0 );
 
 			return false;
