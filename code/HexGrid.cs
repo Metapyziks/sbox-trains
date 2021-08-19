@@ -292,26 +292,22 @@ namespace Ziks.Trains
 			return Directions[(int)edge];
 		}
 
-		private static readonly ThirdParty.PriorityQueue<int, HexCoordEdge> AStarOpenQueue = new();
+		private static readonly ThirdParty.PriorityQueue<float, HexCoordEdge> AStarOpenQueue = new();
 		private static readonly HashSet<HexCoordEdge> AStarOpenSet = new();
-		private static readonly Dictionary<HexCoordEdge, (HexCoordEdge From, int G, int F)> AStarCameFrom = new();
+		private static readonly Dictionary<HexCoordEdge, (HexCoordEdge From, float G, float F)> AStarCameFrom = new();
 
-		private const int StraightCost = 1;
-		private const int CurvedCost = 2;
+		private const float StraightCost = UnitScale;
+		private const float CurvedCost = StraightCost * MathF.PI / 3f;
 
-		private static int H( HexCoordEdge node, HexCoordEdge dest )
+		private static float H( HexCoordEdge node, Vector2 dest )
 		{
-			var tileDiff = node.Coord - dest.Coord;
-			var tileDist = tileDiff.Length;
-			var edgeDist = Math.Abs( (int)node.Edge - (int)dest.Edge );
+			var localPos = (Vector2) GetLocalPosition( node );
 
-			if ( edgeDist > 3 ) edgeDist = 6 - edgeDist;
-
-			return Math.Max(tileDist, edgeDist) * StraightCost;
+			return (dest - localPos).Length;
 		}
 
 		private static void ReconstructPath( List<HexCoordEdge> outPath,
-			Dictionary<HexCoordEdge, (HexCoordEdge From, int G, int F)> cameFrom,
+			Dictionary<HexCoordEdge, (HexCoordEdge From, float G, float F)> cameFrom,
 			HexCoordEdge current )
 		{
 			var startIndex = outPath.Count;
@@ -350,7 +346,9 @@ namespace Ziks.Trains
 			openSet.Clear();
 			cameFrom.Clear();
 
-			openQueue.Enqueue( H( start, end ), start );
+			var endLocalPos = (Vector2) GetLocalPosition( end );
+
+			openQueue.Enqueue( H( start, endLocalPos ), start );
 			openSet.Add( start );
 			cameFrom.Add( start, (start, 0, -1) );
 
@@ -378,7 +376,7 @@ namespace Ziks.Trains
 
 					if ( existing && newCost >= oldCosts.G ) continue;
 
-					var newCosts = (From: node, G: newCost, F: newCost + H( next, end ));
+					var newCosts = (From: node, G: newCost, F: newCost + H( next, endLocalPos ));
 
 					if ( existing )
 					{
