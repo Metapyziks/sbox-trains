@@ -54,6 +54,7 @@ namespace Ziks.Trains
 
 			if ( !cursorPos.HasValue ) return;
 
+			var lastDragEnd = _dragEnd;
 			_dragEnd = hexGrid.GetEdge( cursorPos.Value );
 
 			if ( Input.Pressed( InputButton.Attack1 ) )
@@ -76,24 +77,25 @@ namespace Ziks.Trains
 				return;
 			}
 
+			if ( !lastDragEnd.Equals( _dragEnd ) )
+			{
+				_tempPath.Clear();
+
+				_validPath = HexGrid.GetShortestPath( _tempPath,
+					_dragStart.hexCoord, _dragStart.edge,
+					_dragEnd.hexCoord, _dragEnd.edge, false ) && _tempPath.Count > 1;
+			}
+
 			const float height = 2f;
 			const float width = 4f;
 
-			_tempPath.Clear();
-
-			if ( !HexGrid.GetShortestPath( _tempPath,
-				_dragStart.hexCoord, _dragStart.edge,
-				_dragEnd.hexCoord, _dragEnd.edge, false ) )
+			if ( !_validPath )
 			{
-				_validPath = false;
-				DebugOverlay.Line( hexGrid.GetWorldPosition( _dragStart.hexCoord, _dragStart.edge ) + Vector3.Up * height,
+				DebugOverlay.Line(
+					hexGrid.GetWorldPosition( _dragStart.hexCoord, _dragStart.edge ) + Vector3.Up * height,
 					hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ) + Vector3.Up * height, Color.Red );
 				return;
 			}
-
-			_validPath = _tempPath.Count > 1;
-
-			if ( !_validPath ) return;
 
 			var prev = _tempPath.First();
 
