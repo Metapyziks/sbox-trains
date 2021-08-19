@@ -54,6 +54,9 @@ namespace Ziks.Trains
 
 			if ( !cursorPos.HasValue ) return;
 
+			const float height = 2f;
+			const float width = 4f;
+
 			var lastDragEnd = _dragEnd;
 			_dragEnd = hexGrid.GetEdge( cursorPos.Value );
 
@@ -72,6 +75,16 @@ namespace Ziks.Trains
 						_dragEnd.hexCoord, _dragEnd.edge );
 				}
 
+				var norm = Rotation.FromYaw( 90f ) * hexGrid.GetWorldDirection( _dragEnd.edge );
+
+				DebugOverlay.Line(
+					hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ) - norm * width + Vector3.Up * height,
+					hexGrid.GetWorldPosition( _dragEnd.hexCoord ) - norm * width + Vector3.Up * height, Color.White );
+
+				DebugOverlay.Line(
+					hexGrid.GetWorldPosition( _dragEnd.hexCoord, _dragEnd.edge ) + norm * width + Vector3.Up * height,
+					hexGrid.GetWorldPosition( _dragEnd.hexCoord ) + norm * width + Vector3.Up * height, Color.White );
+
 				_dragging = false;
 				_validPath = false;
 				return;
@@ -85,9 +98,6 @@ namespace Ziks.Trains
 					_dragStart.hexCoord, _dragStart.edge,
 					_dragEnd.hexCoord, _dragEnd.edge, false ) && _tempPath.Count > 1;
 			}
-
-			const float height = 2f;
-			const float width = 4f;
 
 			if ( !_validPath )
 			{
