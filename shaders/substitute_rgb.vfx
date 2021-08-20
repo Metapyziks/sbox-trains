@@ -1,0 +1,156 @@
+// Copyright (c) Valve Corporation, All rights reserved. ==================================================================
+//
+//=========================================================================================================================
+
+HEADER
+{
+	DevShader = false;
+	CompileTargets = ( IS_SM_50 && ( PC || VULKAN ) );
+	Description = "Substitute in different colors for R/G/B channels.";
+	Version = 31;
+}
+
+//=========================================================================================================================
+
+MODES
+{
+	VrForward();
+
+	// Note: vr_depth_only.vfx supports alpha test and translucent features, so if you change them here, you need to update vr_depth_only.vfx
+	Depth( "vr_depth_only.vfx" ); 
+	Reflex( "vr_reflex_layer.vfx" );
+
+	ToolsVis( S_MODE_TOOLS_VIS );
+	ToolsWireframe( "vr_tools_wireframe.vfx" );
+	ToolsShadingComplexity( "vr_tools_shading_complexity.vfx" );
+}
+
+//=========================================================================================================================
+
+FEATURES
+{
+	#include "vr_common_features.fxc"
+
+	Feature( F_METALNESS_TEXTURE, 0..1, "PBR" );
+	Feature( F_AMBIENT_OCCLUSION_TEXTURE, 0..1, "PBR" );
+	Feature( F_REFLEX_SIGHT_ACTIVE, 0..1, "Game" );
+}
+
+//=========================================================================================================================
+
+COMMON
+{
+	#define ENABLE_BINDLESS_RUNTIME
+	#define ENABLE_NORMAL_MAPS
+	#define S_SPECULAR 1
+	#define S_SPECULAR_CUBE_MAP 1
+	#define S_TRANSLUCENT 0
+	#define S_ALPHA_TEST 0
+	#define BLEND_MODE_ALREADY_SET
+	#define S_UV2_DEFAULT_FOR_AO 0
+
+	#include "system.fxc" // This should always be the first include in COMMON
+	#include "vr_common.fxc"
+
+	float3 g_vColor0 < UiType( Color ); Default3( 1.0, 1.0, 1.0 ); UiGroup( "Color,10/20" ); >;
+	float3 g_vColor1 < UiType( Color ); Default3( 1.0, 1.0, 1.0 ); UiGroup( "Color,10/20" ); >;
+	float3 g_vColor2 < UiType( Color ); Default3( 1.0, 1.0, 1.0 ); UiGroup( "Color,10/20" ); >;
+}
+
+//=========================================================================================================================
+
+struct VS_INPUT
+{
+	#include "vr_shared_standard_vs_input.fxc"
+};
+
+//=========================================================================================================================
+
+struct PS_INPUT
+{
+	#include "vr_shared_standard_ps_input.fxc"
+};
+
+//=========================================================================================================================
+
+VS
+{
+	#include "vr_shared_standard_vs_code.fxc"
+
+	BoolAttribute( g_bReflexSightsLayerActive, ( F_REFLEX_SIGHT_ACTIVE ) ? true : false );
+
+	//
+	// Main
+	//
+	PS_INPUT MainVs( INSTANCED_SHADER_PARAMS( VS_INPUT i ) )
+	{
+		PS_INPUT o = VS_SharedStandardProcessing( i );
+
+		return VS_CommonProcessing_Post( o );
+	}
+}
+
+//=========================================================================================================================
+
+PS
+{
+	#include "bindlessfastpath.fxc"
+
+	DynamicCombo( D_OPAQUE_FADE, 0..1, Sys( ALL ) );
+	DynamicCombo( D_VIEWMODEL_PASS, 0..1, Sys( PC ) );
+
+	StaticCombo( S_METALNESS_TEXTURE, F_METALNESS_TEXTURE, Sys( ALL ) );
+	StaticCombo( S_AMBIENT_OCCLUSION_TEXTURE, F_AMBIENT_OCCLUSION_TEXTURE, Sys( ALL ) );
+
+	RenderState( BlendEnable,  false );
+	RenderState( SrcBlend, ONE );
+	RenderState( DstBlend, ZERO );
+
+	//
+	// Albedo & Metalness
+	//
+
+	#if ( S_METALNESS_TEXTURE )
+		#define METALNESS_IN_COLOR
+		CreateTexture2DWithoutSampler( g_tColor ) < Channel( RGB, Box( TextureColor ), Srgb ); 
+													Channel( A, Box( TextureMetalness ), Linear ); 
+													OutputFormat( BC7 ); SrgbRead( true ); >;
+	#elif ( S_AMBIENT_OCCLUSION_TEXTURE )
+        #define AMBIENT_OCCLUSION_IN_COLOR
+		CreateTexture2DWithoutSampler( g_tColor ) < Channel( RGB, Box( TextureColor ), Srgb ); 
+													Channel( A, Box( TextureAmbientOcclusion ), Linear ); 
+													OutputFormat( BC7 ); SrgbRead( true ); >;
+	#else
+        #define AMBIENT_OCCLUSION_IN_COLOR // let it read a 1.0 from alpha.
+		CreateTexture2DWithoutSampler( g_tColor ) < Channel( RGB, Box( TextureColor ), Srgb ); 
+													OutputFormat( DXT1 ); SrgbRead( true ); >;
+	#endif
+
+	BoolAttribute( SupportsLightmapping, ( F_MORPH_SUPPORTED ) ? false : true );
+	BoolAttribute( PerVertexLighting, ( F_MORPH_SUPPORTED ) ? false : true );
+	BoolAttribute( AllowPerDrawCulling, ( F_RENDER_BACKFACES || F_MORPH_SUPPORTED ) ? false : true );
+
+	#define COLOR_SAMPLER_DEFINED
+
+	#include "vr_shared_standard_ps_code.fxc"
+
+	DynamicCombo( D_HIGH_QUALITY_SHADOWS, 0..1, Sys( ALL ) );
+	DynamicComboRule( Requires1( D_HIGH_QUALITY_SHADOWS, D_BAKED_LIGHTING_FROM_PROBE ) );
+
+	//-----------------------------------------------------------------------------------------------------------------
+
+	PS_OUTPUT MainPs( PS_INPUT i )
+	{
+		FinalCombinerInput_t finalCombinerInput = PS_SharedStandardProcessing( i );
+
+        float4 vColorTexel = SampleColorTexture( i.vTextureCoords.xy );
+		float fAlbedoScale = 1.0 / max(1.0, vColorTexel.r + vColorTexel.g + vColorTexel.b);
+        float3 vAlbedo = vColorTexel.r * g_vColor0 + vColorTexel.g * g_vColor1 + vColorTexel.b * g_vColor2;
+
+        finalCombinerInput = CalculateDiffuseAndSpecularFromAlbedoAndMetalness( finalCombinerInput, vAlbedo * fAlbedoScale, 0 );
+
+		return PS_FinalCombiner( finalCombinerInput );
+	}
+}
+
+//=========================================================================================================================

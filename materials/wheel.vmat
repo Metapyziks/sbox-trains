@@ -5,9 +5,9 @@ Layer0
 	shader "vr_simple.vfx"
 
 	//---- Color ----
-	g_flModelTintAmount "0.000"
+	g_flModelTintAmount "1.000"
 	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
-	TextureColor "materials/track.png"
+	TextureColor "[0.141176 0.141176 0.141176 0.921569]"
 
 	//---- Fade ----
 	g_flFadeExponent "1.000"
@@ -23,10 +23,10 @@ Layer0
 	g_flMetalness "0.000"
 
 	//---- Normal ----
-	TextureNormal "[0.501961 0.501961 1.000000 0.000000]"
+	TextureNormal "materials/default/default_normal.tga"
 
 	//---- Roughness ----
-	TextureRoughness "[0.501961 0.501961 0.501961 0.000000]"
+	TextureRoughness "materials/default/default_rough.tga"
 
 	//---- Texture Coordinates ----
 	g_nScaleTexCoordUByModelScaleAxis "0"

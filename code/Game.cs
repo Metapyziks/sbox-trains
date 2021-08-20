@@ -1,4 +1,5 @@
 using Sandbox;
+using Ziks.Trains.RollingStock;
 using Ziks.Trains.Track;
 using Ziks.Trains.UI;
 
@@ -24,6 +25,13 @@ namespace Ziks.Trains
 				HexGrid = new HexGrid();
 				TrackManager = new TrackManager();
 				Hud = new Hud();
+
+				var train = new Train { Throttle = 1f };
+
+				train.SpawnCar( TrainCarModel.Engine );
+				train.SpawnCar( TrainCarModel.Engine );
+				train.SpawnCar( TrainCarModel.Engine );
+				train.SpawnCar( TrainCarModel.Engine );
 			}
 		}
 

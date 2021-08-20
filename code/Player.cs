@@ -61,8 +61,6 @@ namespace Ziks.Trains
 
 		public override void FrameSimulate()
 		{
-			EyeRot = Rotation.FromYaw( 90f ) * Rotation.FromPitch( 75f );
-
 			if ( !Host.IsClient ) return;
 
 			var hexGrid = Game.Current.HexGrid;
@@ -129,7 +127,7 @@ namespace Ziks.Trains
 
 		public override void Simulate()
 		{
-			var vel = (Vector3.Left * Input.Forward) + (Vector3.Backward * Input.Left);
+			var vel = Rotation.FromYaw( 60f ) * (Vector3.Forward * Input.Forward + Vector3.Left * Input.Left);
 
 			if ( Input.Down( InputButton.Jump ) )
 			{
@@ -162,6 +160,8 @@ namespace Ziks.Trains
 			Position = Position.WithZ( Position.z.Clamp( MinZ, MaxZ ) );
 
 			Velocity = Velocity.Approach( 0, Velocity.Length * Time.Delta * 5.0f );
+
+			EyeRot = Rotation.FromYaw( 60f ) * Rotation.FromPitch( 75f );
 
 			WishVelocity = Velocity;
 			GroundEntity = null;

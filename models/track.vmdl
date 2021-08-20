@@ -17,6 +17,14 @@
 								from = "track.vmat"
 								to = "materials/track.vmat"
 							},
+							{
+								from = "engine.vmat"
+								to = "materials/engine.vmat"
+							},
+							{
+								from = "rearwheel.vmat"
+								to = "materials/wheel.vmat"
+							},
 						]
 						use_global_default = false
 						global_default_material = ""
@@ -49,6 +57,12 @@
 								"Cube_002",
 								"Track_004",
 								"Track_003",
+								"Buffer_001",
+								"Track_002",
+								"Engine_001",
+								"RearWheel",
+								"Hopper_001",
+								"Wheel",
 							]
 						}
 					},
@@ -72,8 +86,13 @@
 								"Cylinder_001",
 								"Cylinder",
 								"Cube_002",
-								"Track_002",
 								"Track_003",
+								"Buffer_001",
+								"Track_001",
+								"Engine_001",
+								"RearWheel",
+								"Wheel",
+								"Hopper_001",
 							]
 						}
 					},
@@ -99,6 +118,11 @@
 								"Cube_002",
 								"Track_002",
 								"Track_004",
+								"Track_001",
+								"Engine_001",
+								"RearWheel",
+								"Wheel",
+								"Hopper_001",
 							]
 						}
 					},

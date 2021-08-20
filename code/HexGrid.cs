@@ -251,14 +251,29 @@ namespace Ziks.Trains
 			return plane.Trace( ray, true, maxDistance );
 		}
 
+		public Vector3 GetWorldPosition( Vector3 localPos )
+		{
+			return Position + Rotation * localPos * Scale;
+		}
+
 		public Vector3 GetWorldPosition( HexCoord gridPos )
 		{
-			return Position + Rotation * GetLocalPosition( gridPos ) * Scale;
+			return GetWorldPosition( GetLocalPosition( gridPos ) );
+		}
+
+		public Vector3 GetWorldPosition( HexCoord gridPos, HexEdge edge )
+		{
+			return GetWorldPosition( GetLocalPosition( gridPos, edge ) );
 		}
 
 		public Vector3 GetWorldPosition( HexCoordEdge coordEdge )
 		{
-			return Position + Rotation * GetLocalPosition( coordEdge ) * Scale;
+			return GetWorldPosition( GetLocalPosition( coordEdge ) );
+		}
+
+		public Vector3 GetWorldVector( Vector3 localVector )
+		{
+			return Rotation * localVector * Scale;
 		}
 
 		public Vector3 GetWorldDirection( HexEdge edge )
@@ -270,16 +285,21 @@ namespace Ziks.Trains
 		{
 			return gridPos.X * Axis0 + gridPos.Y * Axis1;
 		}
-
-		public static Vector3 GetLocalPosition( HexCoordEdge coordEdge )
+		
+		public static Vector3 GetLocalPosition( HexCoord gridPos, HexEdge edge )
 		{
-			var prevPos = coordEdge.Coord;
-			var nextPos = coordEdge.Coord + coordEdge.Edge;
+			var prevPos = gridPos;
+			var nextPos = gridPos + edge;
 
 			var a = prevPos.X * Axis0 + prevPos.Y * Axis1;
 			var b = nextPos.X * Axis0 + nextPos.Y * Axis1;
 
 			return a * 0.5f + b * 0.5f;
+		}
+
+		public static Vector3 GetLocalPosition( HexCoordEdge coordEdge )
+		{
+			return GetLocalPosition( coordEdge.Coord, coordEdge.Edge );
 		}
 
 		public Vector3 GetLocalPosition( Vector3 worldPos )
@@ -291,7 +311,47 @@ namespace Ziks.Trains
 		{
 			return Directions[(int)edge];
 		}
+		
+		public bool GetWorldCurve( HexCoord gridPos, HexEdge from, HexEdge to, out float radius, out Vector3 center )
+		{
+			if ( !GetLocalCurve( gridPos, from, to, out radius, out center ) ) return false;
 
+			radius = Scale * radius;
+			center = GetWorldPosition( center );
+			return true;
+		}
+
+		public bool GetLocalCurve( HexCoord gridPos, HexEdge from, HexEdge to, out float radius, out Vector3 center )
+		{
+			radius = default;
+			center = default;
+
+			if ( from == to || from.Opposite() == to )
+			{
+				return false;
+			}
+
+			var fromPos = GetLocalPosition( gridPos, from );
+			var fromDir = GetLocalDirection( from.Opposite() );
+			var fromNormal = new Vector3( fromDir.y, -fromDir.x );
+
+			if ( from == (HexEdge)(((int)to + 2) % 6) )
+			{
+				radius = -UnitScale * HalfRoot3;
+				center = fromPos - radius * fromNormal;
+				return true;
+			}
+
+			if ( from == (HexEdge)(((int)to + 4) % 6) )
+			{
+				radius = UnitScale * HalfRoot3;
+				center = fromPos - radius * fromNormal;
+				return true;
+			}
+
+			return false;
+		}
+		
 		private static readonly ThirdParty.PriorityQueue<float, HexCoordEdge> AStarOpenQueue = new();
 		private static readonly HashSet<HexCoordEdge> AStarOpenSet = new();
 		private static readonly Dictionary<HexCoordEdge, (HexCoordEdge From, float G, float F)> AStarCameFrom = new();

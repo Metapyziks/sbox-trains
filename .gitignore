@@ -9,3 +9,5 @@ code/Properties/
 *.vtex_c
 *.vmat_c
 *.csproj
+
+*.user

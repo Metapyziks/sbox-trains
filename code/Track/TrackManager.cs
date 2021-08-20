@@ -81,6 +81,12 @@ namespace Ziks.Trains.Track
 		private readonly List<HexCoordEdge> _tempPath = new ();
 		private readonly List<RailPiece> _tempPieces = new ();
 
+		public RailTile this[ HexCoord coord ]
+		{
+			get => _tiles.TryGetValue( coord, out var tile ) ? tile : RailTile.None;
+			set => SetTile( coord, value );
+		}
+
 		public void SpawnTrack( Client client, HexCoordEdge start, HexCoordEdge end )
 		{
 			Host.AssertServer();
