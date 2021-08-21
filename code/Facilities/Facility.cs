@@ -13,19 +13,19 @@ namespace Ziks.Trains.Facilities
 
 	public partial class Facility : ModelEntity
 	{
-		private HexBounds[] _localFootprint = { HexCoord.Zero };
+		private HexCircle[] _localFootprint = { HexCoord.Zero };
 
 		public FacilityType Type { get; set; }
 
 		public bool IsInitialized { get; set; }
 
 		[Net]
-		public HexBounds LocalBounds { get; set; }
+		public HexCircle LocalBounds { get; set; }
 
 		public HexCoord HexPosition { get; set; }
 
 		[Net]
-		public HexBounds[] LocalFootprint
+		public HexCircle[] LocalFootprint
 		{
 			get => _localFootprint;
 			set
@@ -45,11 +45,11 @@ namespace Ziks.Trains.Facilities
 
 		private void UpdateLocalBounds()
 		{
-			LocalBounds = HexBounds.Empty;
+			LocalBounds = new HexCircle( HexCoord.Zero, 0 );
 
 			foreach ( var bounds in LocalFootprint )
 			{
-				LocalBounds = LocalBounds.Union( bounds );
+				LocalBounds = LocalBounds.ExpandToContain( bounds );
 			}
 		}
 
@@ -70,7 +70,7 @@ namespace Ziks.Trains.Facilities
 		public bool IsWithinCatchment( HexCoord hexCoord )
 		{
 			var localHexCoord = hexCoord - HexPosition;
-			var catchmentBounds = ((HexBounds)localHexCoord).Expand( CatchmentRadius );
+			var catchmentBounds = ((HexCircle)localHexCoord).Expand( CatchmentRadius );
 
 			if ( !LocalBounds.Intersects( catchmentBounds ) ) return false;
 

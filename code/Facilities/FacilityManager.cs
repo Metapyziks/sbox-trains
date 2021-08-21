@@ -70,10 +70,16 @@ namespace Ziks.Trains.Facilities
 
 			foreach ( var localBounds in facility.LocalFootprint )
 			{
-				var bounds = localBounds + facility.HexPosition;
+				var footprintBounds = localBounds + facility.HexPosition;
+				var catchmentBounds = footprintBounds.Expand( facility.CatchmentRadius );
 
-				foreach ( var coord in bounds.ContainedCoords )
+				var footprintCoordCount = footprintBounds.CoordinateCount;
+				var catchmentCoordCount = catchmentBounds.CoordinateCount;
+
+				for ( var i = 0; i < footprintCoordCount; ++i )
 				{
+					var coord = footprintBounds.GetCoordinate( i );
+
 					if ( _footprintCoords.TryGetValue( coord, out var other ) )
 					{
 						if ( other == facility ) continue;
@@ -86,10 +92,9 @@ namespace Ziks.Trains.Facilities
 					}
 				}
 
-				foreach ( var coord in bounds.Expand( facility.CatchmentRadius ).ContainedCoords )
+				for ( var i = footprintCoordCount; i < catchmentCoordCount; ++i )
 				{
-					// Don't include footprint in catchment area
-					if ( bounds.Contains( coord ) ) continue;
+					var coord = catchmentBounds.GetCoordinate( i );
 
 					if ( _catchmentCoords.TryGetValue( coord, out var other ) )
 					{
@@ -103,17 +108,6 @@ namespace Ziks.Trains.Facilities
 					}
 				}
 			}
-		}
-
-		[Event("client.tick")]
-		private void OnTick()
-		{
-			//Log.Info( $"Facility count: {Facilities.Count}" );
-
-			//if ( _initializedFacilityCount != Facilities.Count )
-			//{
-			//	UpdateCoordDictionaries();
-			//}
 		}
 
 		public Facility GetFacilityFromFootprint( HexCoord coord )

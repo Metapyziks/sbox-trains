@@ -81,6 +81,11 @@ namespace Ziks.Trains
 			return new(a.X - b.X, a.Y - b.Y);
 		}
 
+		public static HexCoord operator *( HexCoord a, int scale )
+		{
+			return new( a.X * scale, a.Y * scale );
+		}
+
 		public static bool operator ==( HexCoord a, HexCoord b )
 		{
 			return a.X == b.X && a.Y == b.Y;
@@ -154,136 +159,113 @@ namespace Ziks.Trains
 		}
 	}
 
-	public readonly struct HexBounds : IEquatable<HexBounds>
+	public readonly struct HexCircle : IEquatable<HexCircle>
 	{
-		public static implicit operator HexBounds( HexCoord hexCoord )
+		public static implicit operator HexCircle( HexCoord hexCoord )
 		{
-			return new HexBounds( hexCoord.X, hexCoord.Y, hexCoord.Z, hexCoord.X + 1, hexCoord.Y + 1, hexCoord.Z + 1 );
+			return new HexCircle( hexCoord, 0 );
 		}
 
-		public static HexBounds operator +( HexBounds bounds, HexCoord coord )
+		public static HexCircle operator +( HexCircle ring, HexCoord coord )
 		{
-			return new HexBounds( bounds.XMin + coord.X, bounds.YMin + coord.Y, bounds.ZMin + coord.Z,
-				bounds.XMax + coord.X, bounds.YMax + coord.Y, bounds.ZMax + coord.Z );
+			return new HexCircle( ring.HexCoord + coord, ring.Radius );
 		}
 
-		public static HexBounds operator -( HexBounds bounds, HexCoord coord )
+		public static HexCircle operator -( HexCircle ring, HexCoord coord )
 		{
-			return new HexBounds( bounds.XMin - coord.X, bounds.YMin - coord.Y, bounds.ZMin - coord.Z,
-				bounds.XMax - coord.X, bounds.YMax - coord.Y, bounds.ZMax - coord.Z );
+			return new HexCircle( ring.HexCoord - coord, ring.Radius );
 		}
 
-		public static HexBounds Empty => new HexBounds( 
-			int.MaxValue, int.MaxValue, int.MaxValue,
-			int.MinValue, int.MinValue, int.MinValue );
-
-		public int XMin { get; init; }
-		public int YMin { get; init; }
-		public int ZMin { get; init; }
-
-		public int XMax { get; init; }
-		public int YMax { get; init; }
-		public int ZMax { get; init; }
-
-		public bool IsEmpty => XMin >= XMax || YMin >= YMax || ZMin >= ZMax;
-
-		private HexBounds( int xMin, int yMin, int zMin, int xMax, int yMax, int zMax )
+		public static bool operator ==( HexCircle a, HexCircle b )
 		{
-			XMin = xMin;
-			YMin = yMin;
-			ZMin = zMin;
-
-			XMax = xMax;
-			YMax = yMax;
-			ZMax = zMax;
+			return a.HexCoord == b.HexCoord && a.Radius == b.Radius;
 		}
 
-		public HexBounds Union( HexBounds other )
+		public static bool operator !=( HexCircle a, HexCircle b )
 		{
-			return new HexBounds(
-				Math.Min( XMin, other.XMin ), Math.Min( YMin, other.YMin ), Math.Min( ZMin, other.ZMin ),
-				Math.Max( XMax, other.XMax ), Math.Max( YMax, other.YMax ), Math.Max( ZMax, other.ZMax ) );
+			return a.HexCoord != b.HexCoord || a.Radius != b.Radius;
 		}
 
-		public bool Contains( HexBounds other )
+		public HexCoord HexCoord { get; init; }
+		public int Radius { get; init; }
+
+		public HexCircle( HexCoord hexCoord, int radius )
 		{
-			return XMin <= other.XMin && YMin <= other.YMin && ZMin <= other.ZMin
-			    && XMax >= other.XMax && YMax >= other.YMax && ZMax >= other.ZMax;
+			HexCoord = hexCoord;
+			Radius = radius;
 		}
 
-		public bool Intersects( HexBounds other )
+		public int DistanceTo( HexCoord coord )
 		{
-			return XMin <= other.XMax && YMin <= other.YMax && ZMin <= other.ZMax
-			       && XMax >= other.XMin && YMax >= other.YMin && ZMax >= other.ZMin;
+			return (HexCoord - coord).Length;
 		}
 
-		public HexBounds Expand( int amount )
+		public bool Contains( HexCircle other )
 		{
-			return Expand( amount, amount, amount, amount, amount, amount );
+			return DistanceTo( other.HexCoord ) <= Radius - other.Radius;
 		}
 
-		public HexBounds Expand( int x, int y, int z )
+		public bool Intersects( HexCircle other )
 		{
-			return Expand( x, y, z, x, y, z );
+			return DistanceTo( other.HexCoord ) <= Radius + other.Radius;
 		}
 
-		public HexBounds Expand( int xMin, int yMin, int zMin, int xMax, int yMax, int zMax )
+		public HexCircle Expand( int amount )
 		{
-			return new HexBounds( XMin - xMin, YMin - yMin, ZMin - zMin, XMax + xMax, YMax + yMax, ZMax + zMax );
+			return new HexCircle( HexCoord, Radius + amount );
 		}
 
-		public HexCoord GetRandomCoord( Random random )
+		public HexCircle ExpandToContain( HexCircle other )
 		{
-			if ( IsEmpty ) throw new Exception( "Can't get a random coord from empty bounds." );
-
-			// TODO: do this without rejection sampling
-
-			// We shouldn't need anything close to this
-			var maxAttempts = 1024;
-
-			while ( maxAttempts-- >= 0 )
-			{
-				var coord = new HexCoord( random.Next( XMin, XMax ), random.Next( YMin, YMax ) );
-
-				if ( Contains( coord ) ) return coord;
-			}
-
-			Log.Warning( "Ran out of attempts in GetRandomCoord" );
-
-			return new HexCoord( XMin, YMin );
+			var expandAmount = DistanceTo( other.HexCoord ) + other.Radius - Radius;
+			return expandAmount > 0 ? Expand( expandAmount ) : this;
 		}
 
-		public IEnumerable<HexCoord> ContainedCoords
+		public int EdgeCoordinateCount => GetEdgeCoordinateCount( Radius );
+		public int CoordinateCount => GetCoordinateCount( Radius );
+
+		public static int GetEdgeCoordinateCount( int radius )
 		{
-			get
-			{
-				for ( var x = XMin; x < XMax; ++x )
-				{
-					for ( var y = YMin; y < YMax; ++y )
-					{
-						var coord = new HexCoord( x, y );
-
-						if ( coord.Z < ZMin || coord.Z >= ZMax ) continue;
-
-						yield return coord;
-					}
-				}
-			}
+			return Math.Max( 1, radius * 6 );
 		}
 
-		public bool Equals(HexBounds other)
+		public static int GetCoordinateCount( int radius )
 		{
-			return XMin == other.XMin && YMin == other.YMin && ZMin == other.ZMin && XMax == other.XMax && YMax == other.YMax && ZMax == other.ZMax;
+			return 3 * radius * (radius + 1) + 1;
+		}
+
+		public HexCoord GetEdgeCoordinate( int index )
+		{
+			if ( Radius == 0 ) return HexCoord;
+
+			var edgeA = (HexEdge) ((index / Radius) % 6);
+			var edgeB = (HexEdge) (((int) edgeA + 2) % 6);
+
+			return HexCoord + (HexCoord)edgeA * Radius + (HexCoord)edgeB * (index % Radius);
+		}
+
+		public HexCoord GetCoordinate( int index )
+		{
+			if ( index == 0 ) return HexCoord;
+
+			var radius = (int) ((-3f + MathF.Sqrt( -3 + 12 * index )) / 6f) + 1;
+
+			return new HexCircle( HexCoord, radius ).GetEdgeCoordinate( index - GetCoordinateCount( radius - 1 ) );
+		}
+
+		public bool Equals(HexCircle other)
+		{
+			return HexCoord == other.HexCoord && Radius == other.Radius;
 		}
 
 		public override bool Equals(object obj)
 		{
-			return obj is HexBounds other && Equals(other);
+			return obj is HexCircle other && Equals(other);
 		}
 
 		public override int GetHashCode()
 		{
-			return HashCode.Combine(XMin, YMin, ZMin, XMax, YMax, ZMax);
+			return HashCode.Combine(HexCoord, Radius);
 		}
 	}
 

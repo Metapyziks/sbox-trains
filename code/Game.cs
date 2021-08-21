@@ -50,19 +50,21 @@ namespace Ziks.Trains
 
 			// Spawn some facilities
 
-			var spawnBounds = ((HexBounds) HexCoord.Zero).Expand( 16 );
+			var spawnBounds = ((HexCircle) HexCoord.Zero).Expand( 16 );
 			var random = new System.Random();
 
-			for ( var i = 0; i < 8; ++i )
+			var coordCount = spawnBounds.CoordinateCount;
+
+			for ( var i = 0; i < 1; ++i )
 			{
-				var coord = spawnBounds.GetRandomCoord( random );
+				var coord = spawnBounds.GetCoordinate( random.Next( 0, coordCount ) );
 
 				FacilityManager.SpawnFacility( coord, FacilityType.Mine );
 			}
 
-			for ( var i = 0; i < 4; ++i )
+			for ( var i = 0; i < 1; ++i )
 			{
-				var coord = spawnBounds.GetRandomCoord( random );
+				var coord = spawnBounds.GetCoordinate( random.Next( 0, coordCount ) );
 
 				FacilityManager.SpawnFacility( coord, FacilityType.PowerPlant );
 			}
