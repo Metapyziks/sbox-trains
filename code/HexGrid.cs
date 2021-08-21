@@ -154,6 +154,139 @@ namespace Ziks.Trains
 		}
 	}
 
+	public readonly struct HexBounds : IEquatable<HexBounds>
+	{
+		public static implicit operator HexBounds( HexCoord hexCoord )
+		{
+			return new HexBounds( hexCoord.X, hexCoord.Y, hexCoord.Z, hexCoord.X + 1, hexCoord.Y + 1, hexCoord.Z + 1 );
+		}
+
+		public static HexBounds operator +( HexBounds bounds, HexCoord coord )
+		{
+			return new HexBounds( bounds.XMin + coord.X, bounds.YMin + coord.Y, bounds.ZMin + coord.Z,
+				bounds.XMax + coord.X, bounds.YMax + coord.Y, bounds.ZMax + coord.Z );
+		}
+
+		public static HexBounds operator -( HexBounds bounds, HexCoord coord )
+		{
+			return new HexBounds( bounds.XMin - coord.X, bounds.YMin - coord.Y, bounds.ZMin - coord.Z,
+				bounds.XMax - coord.X, bounds.YMax - coord.Y, bounds.ZMax - coord.Z );
+		}
+
+		public static HexBounds Empty => new HexBounds( 
+			int.MaxValue, int.MaxValue, int.MaxValue,
+			int.MinValue, int.MinValue, int.MinValue );
+
+		public int XMin { get; init; }
+		public int YMin { get; init; }
+		public int ZMin { get; init; }
+
+		public int XMax { get; init; }
+		public int YMax { get; init; }
+		public int ZMax { get; init; }
+
+		public bool IsEmpty => XMin >= XMax || YMin >= YMax || ZMin >= ZMax;
+
+		private HexBounds( int xMin, int yMin, int zMin, int xMax, int yMax, int zMax )
+		{
+			XMin = xMin;
+			YMin = yMin;
+			ZMin = zMin;
+
+			XMax = xMax;
+			YMax = yMax;
+			ZMax = zMax;
+		}
+
+		public HexBounds Union( HexBounds other )
+		{
+			return new HexBounds(
+				Math.Min( XMin, other.XMin ), Math.Min( YMin, other.YMin ), Math.Min( ZMin, other.ZMin ),
+				Math.Max( XMax, other.XMax ), Math.Max( YMax, other.YMax ), Math.Max( ZMax, other.ZMax ) );
+		}
+
+		public bool Contains( HexBounds other )
+		{
+			return XMin <= other.XMin && YMin <= other.YMin && ZMin <= other.ZMin
+			    && XMax >= other.XMax && YMax >= other.YMax && ZMax >= other.ZMax;
+		}
+
+		public bool Intersects( HexBounds other )
+		{
+			return XMin <= other.XMax && YMin <= other.YMax && ZMin <= other.ZMax
+			       && XMax >= other.XMin && YMax >= other.YMin && ZMax >= other.ZMin;
+		}
+
+		public HexBounds Expand( int amount )
+		{
+			return Expand( amount, amount, amount, amount, amount, amount );
+		}
+
+		public HexBounds Expand( int x, int y, int z )
+		{
+			return Expand( x, y, z, x, y, z );
+		}
+
+		public HexBounds Expand( int xMin, int yMin, int zMin, int xMax, int yMax, int zMax )
+		{
+			return new HexBounds( XMin - xMin, YMin - yMin, ZMin - zMin, XMax + xMax, YMax + yMax, ZMax + zMax );
+		}
+
+		public HexCoord GetRandomCoord( Random random )
+		{
+			if ( IsEmpty ) throw new Exception( "Can't get a random coord from empty bounds." );
+
+			// TODO: do this without rejection sampling
+
+			// We shouldn't need anything close to this
+			var maxAttempts = 1024;
+
+			while ( maxAttempts-- >= 0 )
+			{
+				var coord = new HexCoord( random.Next( XMin, XMax ), random.Next( YMin, YMax ) );
+
+				if ( Contains( coord ) ) return coord;
+			}
+
+			Log.Warning( "Ran out of attempts in GetRandomCoord" );
+
+			return new HexCoord( XMin, YMin );
+		}
+
+		public IEnumerable<HexCoord> ContainedCoords
+		{
+			get
+			{
+				for ( var x = XMin; x < XMax; ++x )
+				{
+					for ( var y = YMin; y < YMax; ++y )
+					{
+						var coord = new HexCoord( x, y );
+
+						if ( coord.Z < ZMin || coord.Z >= ZMax ) continue;
+
+						yield return coord;
+					}
+				}
+			}
+		}
+
+		public bool Equals(HexBounds other)
+		{
+			return XMin == other.XMin && YMin == other.YMin && ZMin == other.ZMin && XMax == other.XMax && YMax == other.YMax && ZMax == other.ZMax;
+		}
+
+		public override bool Equals(object obj)
+		{
+			return obj is HexBounds other && Equals(other);
+		}
+
+		public override int GetHashCode()
+		{
+			return HashCode.Combine(XMin, YMin, ZMin, XMax, YMax, ZMax);
+		}
+	}
+
 	public partial class HexGrid : Entity
 	{
 		public const float PiOver6 = MathF.PI / 6f;
@@ -396,6 +529,14 @@ namespace Ziks.Trains
 
 			if ( start == end ) return false;
 
+			var facilityManager = Game.Current.FacilityManager;
+			var facility = facilityManager.GetFacilityFromFootprint( start.Coord )
+               ?? facilityManager.GetFacilityFromFootprint( end.Coord )
+               ?? facilityManager.GetFacilityFromFootprint( start.Coord + start.Edge )
+               ?? facilityManager.GetFacilityFromFootprint( end.Coord + end.Edge );
+
+			if ( facility != null ) return false;
+
 			start = start.Opposite;
 
 			var openQueue = AStarOpenQueue;
@@ -406,57 +547,72 @@ namespace Ziks.Trains
 			openSet.Clear();
 			cameFrom.Clear();
 
-			var endLocalPos = (Vector2) GetLocalPosition( end );
-
-			openQueue.Enqueue( H( start, endLocalPos ), start );
-			openSet.Add( start );
-			cameFrom.Add( start, (start, 0, -1) );
-
-			while ( !openQueue.IsEmpty )
+			try
 			{
-				var node = openQueue.DequeueValue();
-				openSet.Remove( node );
+				var endLocalPos = (Vector2)GetLocalPosition( end );
 
-				if ( node == end )
+				openQueue.Enqueue( H( start, endLocalPos ), start );
+				openSet.Add( start );
+				cameFrom.Add( start, (start, 0, -1) );
+
+				while ( !openQueue.IsEmpty )
 				{
-					ReconstructPath( outPath, cameFrom, node );
-					return true;
+					var node = openQueue.DequeueValue();
+					openSet.Remove( node );
+
+					if ( node == end )
+					{
+						ReconstructPath( outPath, cameFrom, node );
+						return true;
+					}
+
+					var nodeCost = cameFrom[node].G;
+					var nextCoord = node.Coord + node.Edge;
+
+					for ( var i = 2; i >= 0; --i )
+					{
+						var nextEdge = (HexEdge)(((int)node.Edge + EdgeOffsets[i]) % 6);
+
+						var next = new HexCoordEdge( nextCoord, nextEdge );
+
+						if ( facilityManager.GetFacilityFromFootprint( next.Coord + next.Edge ) != null )
+						{
+							continue;
+						}
+
+						var newCost = nodeCost + (i == 0 ? StraightCost : CurvedCost);
+						var existing = cameFrom.TryGetValue( next, out var oldCosts );
+
+						if ( existing && newCost >= oldCosts.G ) continue;
+
+						var newCosts = (From: node, G: newCost, F: newCost + H( next, endLocalPos ));
+
+						if ( existing )
+						{
+							cameFrom[next] = newCosts;
+						}
+						else
+						{
+							cameFrom.Add( next, newCosts );
+						}
+
+						if ( !openSet.Add( next ) )
+						{
+							openQueue.Remove( new(oldCosts.F, next) );
+						}
+
+						openQueue.Enqueue( newCosts.F, next );
+					}
 				}
 
-				var nodeCost = cameFrom[node].G;
-				var nextCoord = node.Coord + node.Edge;
-
-				for ( var i = 2; i >= 0; --i )
-				{
-					var nextEdge = (HexEdge)(((int)node.Edge + EdgeOffsets[i]) % 6);
-
-					var next = new HexCoordEdge( nextCoord, nextEdge );
-					var newCost = nodeCost + (i == 0 ? StraightCost : CurvedCost);
-					var existing = cameFrom.TryGetValue( next, out var oldCosts );
-
-					if ( existing && newCost >= oldCosts.G ) continue;
-
-					var newCosts = (From: node, G: newCost, F: newCost + H( next, endLocalPos ));
-
-					if ( existing )
-					{
-						cameFrom[next] = newCosts;
-					}
-					else
-					{
-						cameFrom.Add( next, newCosts );
-					}
-
-					if ( !openSet.Add( next ) )
-					{
-						openQueue.Remove( new(oldCosts.F, next) );
-					}
-
-					openQueue.Enqueue( newCosts.F, next );
-				}
+				return false;
 			}
-
-			return false;
+			finally
+			{
+				openQueue.Clear();
+				openSet.Clear();
+				cameFrom.Clear();
+			}
 		}
 	}
 }

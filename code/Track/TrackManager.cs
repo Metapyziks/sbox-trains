@@ -75,6 +75,7 @@ namespace Ziks.Trains.Track
 
 		public TrackManager()
 		{
+			EnableDrawing = false;
 			Transmit = TransmitType.Always;
 		}
 

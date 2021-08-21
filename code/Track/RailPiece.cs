@@ -43,6 +43,8 @@ namespace Ziks.Trains.Track
 		BottomRightBuffer = 11,
 		BottomBuffer = 12,
 		BottomLeftBuffer = 13,
-		TopLeftBuffer = 14
+		TopLeftBuffer = 14,
+
+		Platform = 15
 	}
 }

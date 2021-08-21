@@ -277,7 +277,7 @@ namespace Ziks.Trains.RollingStock
 
 				if ( nextTile == RailTile.None )
 				{
-					Throttle = 0f;
+					// Throttle = 0f;
 					TrackVelocity = 0f;
 					HeadTileTravel = headTile.Length;
 					break;

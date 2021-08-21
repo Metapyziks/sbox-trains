@@ -117,10 +117,18 @@ namespace Ziks.Trains
 			if ( !_validPath ) return;
 
 			var prev = _tempPath.First();
+			var facilityManager = Game.Current.FacilityManager;
 
 			foreach ( var next in _tempPath.Skip( 1 ) )
 			{
-				DrawTrackPiece( hexGrid, next.Coord, prev.Edge.Opposite(), next.Edge, Color.White );
+				var willBeStation = false;
+
+				if ( next.Edge == prev.Edge )
+				{
+					willBeStation = facilityManager.GetFacilityFromCatchment( next.Coord ) != null;
+				}
+
+				DrawTrackPiece( hexGrid, next.Coord, prev.Edge.Opposite(), next.Edge, willBeStation ? Color.Blue : Color.White );
 				prev = next;
 			}
 		}

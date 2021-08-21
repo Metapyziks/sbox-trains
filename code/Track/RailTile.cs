@@ -48,6 +48,8 @@ namespace Ziks.Trains.Track
 		BottomLeftBuffer = 1 << RailPiece.BottomLeftBuffer,
 		TopLeftBuffer = 1 << RailPiece.TopLeftBuffer,
 
+		Platform = 1 << RailPiece.Platform,
+
 		/// <summary>
 		/// All straight pieces.
 		/// </summary>
